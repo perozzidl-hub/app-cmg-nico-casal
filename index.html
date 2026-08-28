@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>APP CMG - Control de Ventas, Recetas y Costos</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Librería para lectura de archivos Excel/CSV -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Librería para Gráficos Ejecutivos -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+    <!-- Encabezado Corporativo Coca-Cola Style -->
+    <header class="navbar">
+        <div class="logo-container">
+            <span class="logo-tag">CMG</span>
+            <h1>Control Executivo | Ventas · Recetas · Costos</h1>
+        </div>
+        <div class="status-badge">
+            <span id="data-status">Esperando Bases de Datos...</span>
+        </div>
+    </header>
+
+    <div class="main-container">
+        
+        <!-- Panel de Control y Filtros -->
+        <aside class="sidebar">
+            <h2> Panel de Control</h2>
+            
+            <!-- Carga de Archivos -->
+            <div class="upload-section">
+                <h3>1. Cargar Bases de Datos</h3>
+                <label class="btn-upload">
+                    📂 Subir Archivos (Excel / CSV)
+                    <input type="file" id="file-input" multiple accept=".xlsx, .xls, .csv">
+                </label>
+                <small>Selecciona tus 4 tablas (Ventas, Receta, Precios, Teóricos)</small>
+            </div>
+
+            <!-- Filtros Dinámicos -->
+            <div class="filter-section">
+                <h3>2. Filtros de Análisis</h3>
+                
+                <label for="select-mes">Período / Mes:</label>
+                <select id="select-mes" disabled>
+                    <option value="">-- Cargue los datos --</option>
+                </select>
+
+                <label for="select-articulo">Artículo (Cod. Venta):</label>
+                <select id="select-articulo" disabled>
+                    <option value="">-- Cargue los datos --</option>
+                </select>
+            </div>
+        </aside>
+
+        <!-- Tablero Principal / Dashboard -->
+        <main class="dashboard">
+            
+            <!-- Tarjetas KPIs Ejecutivas -->
+            <div class="kpi-grid">
+                <div class="kpi-card border-red">
+                    <h3>Unidades Vendidas</h3>
+                    <div class="kpi-value" id="kpi-ventas">0</div>
+                    <span class="kpi-sub">Volumen del Período</span>
+                </div>
+                <div class="kpi-card border-black">
+                    <h3>Costo Unitario Real</h3>
+                    <div class="kpi-value" id="kpi-costo-unitario">$0.00</div>
+                    <span class="kpi-sub">Reconstruido por Receta</span>
+                </div>
+                <div class="kpi-card border-red">
+                    <h3>Costo de Ventas Total</h3>
+                    <div class="kpi-value" id="kpi-costo-total">$0.00</div>
+                    <span class="kpi-sub">Impacto Total en P&L</span>
+                </div>
+                <div class="kpi-card border-black">
+                    <h3>Desvío vs. Estándar</h3>
+                    <div class="kpi-value" id="kpi-desvio">0.0%</div>
+                    <span class="kpi-sub">Variación vs. Teórico</span>
+                </div>
+            </div>
+
+            <!-- Gráficos y Tablas Detalladas -->
+            <div class="content-grid">
+                
+                <!-- Desglose de Receta y Costos -->
+                <div class="panel-box">
+                    <div class="panel-header">
+                        <h2> Composición del Costo por Insumo (Receta)</h2>
+                    </div>
+                    <div class="table-container">
+                        <table id="table-receta">
+                            <thead>
+                                <tr>
+                                    <th>Cód. Insumo</th>
+                                    <th>Descripción</th>
+                                    <th>Cant. Teórica</th>
+                                    <th>Precio Compra ($)</th>
+                                    <th>Costo Subtotal ($)</th>
+                                    <th>% Part.</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="6" class="empty-msg">Cargue las bases de datos para visualizar el detalle del artículo.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Gráfico Estructura de Costo -->
+                <div class="panel-box">
+                    <div class="panel-header">
+                        <h2> Distribución Insumos (%)</h2>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="chart-insumos"></canvas>
+                    </div>
+                </div>
+
+            </div>
+
+        </main>
+
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
