@@ -5,16 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CMG · NICO CASAL – Dashboard de Ventas y Costos</title>
 
-  <!-- Google Fonts (Roboto) -->
+  <!-- Google Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet" />
-  <!-- Font Awesome 6 (iconos) -->
+  <!-- Font Awesome 6 -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
   <!-- Chart.js 4 -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <!-- SheetJS (XLSX) para leer el archivo Excel -->
+  <!-- SheetJS (XLSX) -->
   <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+  <!-- html2canvas para exportar PDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
-  <!-- Estilos propios -->
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -23,28 +24,61 @@
       <i class="fas fa-chart-pie"></i>
       <span>CMG · NICO CASAL</span>
     </div>
+    <div class="header-actions">
+      <button id="darkModeToggle" class="btn-icon" title="Modo oscuro">
+        <i class="fas fa-moon"></i>
+      </button>
+      <button id="exportPdfBtn" class="btn-icon" title="Exportar PDF">
+        <i class="fas fa-file-pdf"></i>
+      </button>
+    </div>
     <div class="subtitle">Dashboard de Ventas, Recetas y Costos</div>
   </header>
 
-  <main>
-    <!-- Área de carga de archivo -->
+  <main id="dashboardMain">
+    <!-- Área de carga múltiple -->
     <section class="upload-area" id="uploadArea">
-      <div class="upload-box">
-        <i class="fas fa-file-excel fa-3x"></i>
-        <h3>Cargar archivo de ventas</h3>
-        <p>Arrastra o selecciona tu archivo <strong>ventas.xlsx</strong></p>
-        <input type="file" id="fileInput" accept=".xlsx,.xls" />
+      <div class="upload-grid">
+        <div class="upload-box" data-type="ventas">
+          <i class="fas fa-file-invoice fa-2x"></i>
+          <h4>Ventas</h4>
+          <p>Archivo principal</p>
+          <input type="file" accept=".xlsx,.xls" />
+          <span class="file-status-msg">No cargado</span>
+        </div>
+        <div class="upload-box" data-type="recetas">
+          <i class="fas fa-list-ul fa-2x"></i>
+          <h4>Recetas</h4>
+          <p>(opcional)</p>
+          <input type="file" accept=".xlsx,.xls" />
+          <span class="file-status-msg">No cargado</span>
+        </div>
+        <div class="upload-box" data-type="costos">
+          <i class="fas fa-dollar-sign fa-2x"></i>
+          <h4>Costos de insumos</h4>
+          <p>(opcional)</p>
+          <input type="file" accept=".xlsx,.xls" />
+          <span class="file-status-msg">No cargado</span>
+        </div>
+      </div>
+      <div class="upload-actions">
         <button id="loadDemoBtn" class="btn-demo">Cargar datos de ejemplo</button>
+        <button id="processDataBtn" class="btn-primary" disabled>Procesar datos</button>
       </div>
       <div id="fileStatus" class="file-status"></div>
     </section>
 
-    <!-- Filtros (se muestran después de cargar los datos) -->
+    <!-- Filtros (se muestran después de cargar) -->
     <section class="filtros" id="filtrosSection" style="display: none;">
       <div class="filtro-item">
-        <label for="selectArticulo"><i class="fas fa-box"></i> Artículo</label>
-        <select id="selectArticulo"></select>
-        <input type="text" id="searchArticulo" placeholder="Buscar artículo..." />
+        <label><i class="fas fa-box"></i> Artículos</label>
+        <div class="multi-select-container" id="articulosContainer">
+          <!-- Se llena con checkboxes -->
+        </div>
+        <div class="multi-select-actions">
+          <button class="btn-sm" id="selectAllArticulos">Todos</button>
+          <button class="btn-sm" id="deselectAllArticulos">Ninguno</button>
+        </div>
       </div>
       <div class="filtro-item">
         <label for="selectMes"><i class="fas fa-calendar-alt"></i> Mes</label>
@@ -62,7 +96,7 @@
         <label for="selectTipo"><i class="fas fa-tag"></i> Tipo</label>
         <select id="selectTipo">
           <option value="todos">Todos</option>
-          <option value="P">Producto propio</option>
+          <option value="P">Propio</option>
           <option value="r">Reventa</option>
         </select>
       </div>
@@ -128,7 +162,6 @@
     <p>Datos actualizados al mes de marzo 2026 · Todos los derechos reservados</p>
   </footer>
 
-  <!-- Lógica principal -->
   <script src="app.js"></script>
 </body>
 </html>
