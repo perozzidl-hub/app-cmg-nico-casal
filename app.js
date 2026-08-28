@@ -11,15 +11,7 @@ document.getElementById('file-input').addEventListener('change', handleFileUploa
 document.getElementById('select-mes').addEventListener('change', applyFilters);
 document.getElementById('select-articulo').addEventListener('change', applyFilters);
 
-// Función auxiliar para limpiar nombres de columnas
-function cleanKey(key) {
-    return String(key || '')
-        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Quita tildes
-        .toLowerCase()
-        .trim();
-}
-
-// Formateador de Fechas/Meses
+// Convierte cualquier formato de fecha/mes a MMM-AA
 function formatToMesAnio(value) {
     if (value === null || value === undefined || value === '') return '';
     const meses = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
@@ -74,23 +66,14 @@ function classifyAndStoreData(fileName, data) {
     if (!data.length) return;
 
     const nameLower = fileName.toLowerCase();
-    const sampleKeys = Object.keys(data[0]).map(cleanKey);
 
-    if (nameLower.includes('precio') || sampleKeys.some(k => k.includes('precio') || k.includes('compra'))) {
+    // Clasificación por nombre del archivo
+    if (nameLower.includes('precio')) {
         DB.precios = data;
-    } else if (nameLower.includes('receta') || sampleKeys.some(k => k.includes('teorica') || k.includes('cant'))) {
+    } else if (nameLower.includes('receta')) {
         DB.recetas = data;
-    } else if (nameLower.includes('venta') || sampleKeys.some(k => k.includes('fecha') || k.includes('venta') || k.includes('volumen'))) {
-        DB.ventas = data.map(row => {
-            let newRow = { ...row };
-            Object.keys(row).forEach(key => {
-                const kClean = cleanKey(key);
-                if (kClean.includes('fecha') || kClean.includes('mes') || kClean.includes('periodo')) {
-                    newRow['MesVentaClean'] = formatToMesAnio(row[key]);
-                }
-            });
-            return newRow;
-        });
+    } else if (nameLower.includes('venta')) {
+        DB.ventas = data;
     } else {
         DB.teoricos = data;
     }
@@ -100,66 +83,48 @@ function populateFilterOptions() {
     const selectMes = document.getElementById('select-mes');
     const selectArticulo = document.getElementById('select-articulo');
 
-    // 1. OBTENER MESES DESDE VENTAS
-    let mesesVentas = [];
+    // 1. OBTENER MESES DIRECTAMENTE DE LA COLUMNA "FECHA" DE VENTAS
+    let mesesSet = new Set();
     DB.ventas.forEach(row => {
-        if (row.MesVentaClean && !mesesVentas.includes(row.MesVentaClean)) {
-            mesesVentas.push(row.MesVentaClean);
+        // Busca la clave de la columna sin importar espacios o mayúsculas
+        const keyFecha = Object.keys(row).find(k => k.trim().toUpperCase() === 'FECHA');
+        if (keyFecha && row[keyFecha]) {
+            const mesFormatted = formatToMesAnio(row[keyFecha]);
+            if (mesFormatted) mesesSet.add(mesFormatted);
         }
-        // Búsqueda profunda en la fila si la clave no hizo match
-        Object.keys(row).forEach(k => {
-            const kClean = cleanKey(k);
-            if (kClean.includes('fecha') || kClean.includes('mes')) {
-                const formatted = formatToMesAnio(row[k]);
-                if (formatted && formatted.length <= 7 && formatted.includes('-') && !mesesVentas.includes(formatted)) {
-                    mesesVentas.push(formatted);
-                }
-            }
-        });
     });
 
     selectMes.innerHTML = '<option value="">-- Seleccionar Mes --</option>';
-    mesesVentas.forEach(m => {
+    mesesSet.forEach(m => {
         selectMes.innerHTML += `<option value="${m}">${m}</option>`;
     });
     selectMes.disabled = false;
 
-    // 2. OBTENER ARTÍCULOS EXCLUSIVAMENTE DESDE LA BASE DE VENTAS
-    let articulosMap = new Map();
+    // 2. OBTENER ARTÍCULOS DIRECTAMENTE DE LA COLUMNA "NOMBRE" DE VENTAS
+    let articulosMap = new Map(); // Guarda CÓDIGO -> NOMBRE
 
-    // Priorizamos la lectura de Ventas para obtener CÓDIGO + NOMBRE DEL PRODUCTO
-    const fuenteArticulos = DB.ventas.length > 0 ? DB.ventas : DB.recetas;
-
-    fuenteArticulos.forEach(row => {
-        let codigo = '';
-        let descripcion = '';
-
-        Object.keys(row).forEach(k => {
-            const kClean = cleanKey(k);
-            const val = String(row[k] || '').trim();
-
-            if (!val) return;
-
-            // Detectar columna de código (ej: Codigo, Cod Venta, Articulo)
-            if ((kClean.includes('cod') || kClean.includes('art')) && !kClean.includes('insumo') && !kClean.includes('desc') && !kClean.includes('nom')) {
-                if (!codigo) codigo = val;
-            }
-
-            // Detectar columna de descripción (ej: Descripcion, Nombre, Producto)
-            if ((kClean.includes('desc') || kClean.includes('nom') || kClean.includes('prod') || kClean.includes('denominacion')) && !kClean.includes('insumo')) {
-                if (!descripcion) descripcion = val;
-            }
+    DB.ventas.forEach(row => {
+        const keyNombre = Object.keys(row).find(k => k.trim().toUpperCase() === 'NOMBRE');
+        const keyCod = Object.keys(row).find(k => {
+            const kUpper = k.trim().toUpperCase();
+            return kUpper.includes('COD') || kUpper.includes('ARTICULO') || kUpper === 'ART';
         });
 
-        if (codigo && !articulosMap.has(codigo)) {
-            const textoMostrar = (descripcion && descripcion !== codigo) ? `${codigo} - ${descripcion}` : codigo;
-            articulosMap.set(codigo, textoMostrar);
+        if (keyNombre && row[keyNombre]) {
+            const nombreArt = String(row[keyNombre]).trim();
+            const codArt = keyCod ? String(row[keyCod]).trim() : '';
+
+            if (codArt && !articulosMap.has(codArt)) {
+                articulosMap.set(codArt, `${codArt} - ${nombreArt}`);
+            } else if (!codArt && !articulosMap.has(nombreArt)) {
+                articulosMap.set(nombreArt, nombreArt);
+            }
         }
     });
 
     selectArticulo.innerHTML = '<option value="">-- Seleccionar Artículo --</option>';
-    articulosMap.forEach((textoMostrar, codigo) => {
-        selectArticulo.innerHTML += `<option value="${codigo}">${textoMostrar}</option>`;
+    articulosMap.forEach((textoDisplay, valor) => {
+        selectArticulo.innerHTML += `<option value="${valor}">${textoDisplay}</option>`;
     });
     selectArticulo.disabled = false;
 }
@@ -170,11 +135,11 @@ function applyFilters() {
 
     if (!artSel) return;
 
-    // Receta del Artículo
+    // Buscar Receta asociando por código o por nombre
     const recetaArticulo = DB.recetas.filter(r => {
         return Object.keys(r).some(k => {
-            const kClean = cleanKey(k);
-            return (kClean.includes('cod') || kClean.includes('art')) && !kClean.includes('insumo') && String(r[k]).trim() === artSel;
+            const val = String(r[k]).trim();
+            return val === artSel;
         });
     });
 
@@ -184,43 +149,36 @@ function applyFilters() {
     recetaArticulo.forEach(item => {
         let codInsumo = '';
         let cantTeorica = 0;
-
-        Object.keys(item).forEach(k => {
-            const kClean = cleanKey(k);
-            if (kClean.includes('insumo') && (kClean.includes('cod') || kClean.includes('codigo'))) {
-                codInsumo = String(item[k]).trim();
-            }
-            if (kClean.includes('cant') || kClean.includes('teorica')) {
-                cantTeorica = parseFloat(item[k] || 0);
-            }
-        });
-
-        // Buscar Precio Insumo
-        const precioItem = DB.precios.find(p => {
-            return Object.keys(p).some(k => {
-                const kClean = cleanKey(k);
-                return kClean.includes('insumo') && String(p[k]).trim() === codInsumo;
-            });
-        });
-
-        let precioCompra = 0;
         let descInsumo = '';
 
         Object.keys(item).forEach(k => {
-            const kClean = cleanKey(k);
-            if ((kClean.includes('desc') || kClean.includes('nom')) && kClean.includes('insumo')) {
-                descInsumo = item[k];
+            const kUpper = k.trim().toUpperCase();
+            if (kUpper.includes('INSUMO') && (kUpper.includes('COD') || kUpper.includes('CÓDIGO'))) {
+                codInsumo = String(item[k]).trim();
+            }
+            if (kUpper.includes('CANT') || kUpper.includes('TEORICA') || kUpper.includes('TEÓRICA')) {
+                cantTeorica = parseFloat(item[k] || 0);
+            }
+            if (kUpper.includes('DESC') || kUpper.includes('NOMBRE')) {
+                descInsumo = String(item[k]).trim();
             }
         });
 
+        // Buscar Precio
+        const precioItem = DB.precios.find(p => {
+            return Object.keys(p).some(k => String(p[k]).trim() === codInsumo);
+        });
+
+        let precioCompra = 0;
+
         if (precioItem) {
             Object.keys(precioItem).forEach(k => {
-                const kClean = cleanKey(k);
-                if (kClean.includes('precio') || kClean.includes('compra') || kClean.includes('costo')) {
+                const kUpper = k.trim().toUpperCase();
+                if (kUpper.includes('PRECIO') || kUpper.includes('COMPRA') || kUpper.includes('COSTO')) {
                     precioCompra = parseFloat(precioItem[k] || 0);
                 }
-                if (!descInsumo && (kClean.includes('desc') || kClean.includes('nom'))) {
-                    descInsumo = precioItem[k];
+                if (!descInsumo && (kUpper.includes('DESC') || kUpper.includes('NOMBRE'))) {
+                    descInsumo = String(precioItem[k]).trim();
                 }
             });
         }
@@ -239,22 +197,22 @@ function applyFilters() {
         });
     });
 
-    // Unidades Vendidas
+    // Unidades vendidas desde la base de Ventas
     let cantVendida = 0;
     if (mesSel) {
         const ventaItem = DB.ventas.find(v => {
-            const matchMes = v.MesVentaClean === mesSel || Object.values(v).some(val => formatToMesAnio(val) === mesSel);
-            const matchArt = Object.keys(v).some(k => {
-                const kClean = cleanKey(k);
-                return (kClean.includes('cod') || kClean.includes('art')) && !kClean.includes('insumo') && String(v[k]).trim() === artSel;
-            });
+            const keyFecha = Object.keys(v).find(k => k.trim().toUpperCase() === 'FECHA');
+            const matchMes = keyFecha && formatToMesAnio(v[keyFecha]) === mesSel;
+
+            const matchArt = Object.values(v).some(val => String(val).trim() === artSel);
+
             return matchMes && matchArt;
         });
 
         if (ventaItem) {
             Object.keys(ventaItem).forEach(k => {
-                const kClean = cleanKey(k);
-                if (kClean.includes('cant') || kClean.includes('volumen') || kClean.includes('unidades') || kClean.includes('venta')) {
+                const kUpper = k.trim().toUpperCase();
+                if (kUpper.includes('CANT') || kUpper.includes('VOLUMEN') || kUpper.includes('UNIDADES') || kUpper.includes('VENTA')) {
                     if (!isNaN(ventaItem[k]) && ventaItem[k] !== '') cantVendida = parseFloat(ventaItem[k]);
                 }
             });
