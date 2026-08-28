@@ -35,6 +35,16 @@ function formatToMesAnio(value) {
     return str.toUpperCase();
 }
 
+// Función auxiliar para encontrar la primera clave que coincida con un patrón
+function findKey(obj, patterns) {
+    const keys = Object.keys(obj);
+    for (let pattern of patterns) {
+        const found = keys.find(k => k.trim().toUpperCase().includes(pattern.toUpperCase()));
+        if (found) return found;
+    }
+    return null;
+}
+
 function handleFileUpload(event) {
     const files = event.target.files;
     if (!files.length) return;
@@ -64,10 +74,8 @@ function handleFileUpload(event) {
 
 function classifyAndStoreData(fileName, data) {
     if (!data.length) return;
-
     const nameLower = fileName.toLowerCase();
 
-    // Clasificación por nombre del archivo
     if (nameLower.includes('precio')) {
         DB.precios = data;
     } else if (nameLower.includes('receta')) {
@@ -83,11 +91,10 @@ function populateFilterOptions() {
     const selectMes = document.getElementById('select-mes');
     const selectArticulo = document.getElementById('select-articulo');
 
-    // 1. OBTENER MESES DIRECTAMENTE DE LA COLUMNA "FECHA" DE VENTAS
+    // 1. Obtener meses únicos desde la columna "FECHA" de ventas
     let mesesSet = new Set();
     DB.ventas.forEach(row => {
-        // Busca la clave de la columna sin importar espacios o mayúsculas
-        const keyFecha = Object.keys(row).find(k => k.trim().toUpperCase() === 'FECHA');
+        const keyFecha = findKey(row, ['FECHA']);
         if (keyFecha && row[keyFecha]) {
             const mesFormatted = formatToMesAnio(row[keyFecha]);
             if (mesFormatted) mesesSet.add(mesFormatted);
@@ -100,90 +107,122 @@ function populateFilterOptions() {
     });
     selectMes.disabled = false;
 
-    // 2. OBTENER ARTÍCULOS DIRECTAMENTE DE LA COLUMNA "NOMBRE" DE VENTAS
-    let articulosMap = new Map(); // Guarda CÓDIGO -> NOMBRE
-
+    // 2. Obtener nombres de artículos desde la columna "NOMBRE" de ventas
+    let articulosSet = new Set(); // Usamos un Set para evitar duplicados
     DB.ventas.forEach(row => {
-        const keyNombre = Object.keys(row).find(k => k.trim().toUpperCase() === 'NOMBRE');
-        const keyCod = Object.keys(row).find(k => {
-            const kUpper = k.trim().toUpperCase();
-            return kUpper.includes('COD') || kUpper.includes('ARTICULO') || kUpper === 'ART';
-        });
-
+        const keyNombre = findKey(row, ['NOMBRE', 'ARTICULO', 'PRODUCTO']);
         if (keyNombre && row[keyNombre]) {
             const nombreArt = String(row[keyNombre]).trim();
-            const codArt = keyCod ? String(row[keyCod]).trim() : '';
-
-            if (codArt && !articulosMap.has(codArt)) {
-                articulosMap.set(codArt, `${codArt} - ${nombreArt}`);
-            } else if (!codArt && !articulosMap.has(nombreArt)) {
-                articulosMap.set(nombreArt, nombreArt);
-            }
+            if (nombreArt) articulosSet.add(nombreArt);
         }
     });
 
     selectArticulo.innerHTML = '<option value="">-- Seleccionar Artículo --</option>';
-    articulosMap.forEach((textoDisplay, valor) => {
-        selectArticulo.innerHTML += `<option value="${valor}">${textoDisplay}</option>`;
+    // Opcional: si además quieres mostrar el código, podrías obtenerlo, pero el valor será el nombre
+    articulosSet.forEach(nombre => {
+        selectArticulo.innerHTML += `<option value="${nombre}">${nombre}</option>`;
     });
     selectArticulo.disabled = false;
 }
 
 function applyFilters() {
     const mesSel = document.getElementById('select-mes').value;
-    const artSel = document.getElementById('select-articulo').value;
+    const artSel = document.getElementById('select-articulo').value; // Este es el NOMBRE del artículo
 
-    if (!artSel) return;
+    if (!artSel) {
+        // Limpiar KPIs y tabla si no hay artículo seleccionado
+        document.getElementById('kpi-ventas').innerText = '0';
+        document.getElementById('kpi-costo-unitario').innerText = '$ 0.00';
+        document.getElementById('kpi-costo-total').innerText = '$ 0.00';
+        document.querySelector('#table-receta tbody').innerHTML = '<tr><td colspan="6" class="empty-msg">Seleccione un artículo para ver su receta.</td></tr>';
+        if (insumosChart) insumosChart.destroy();
+        return;
+    }
 
-    // Buscar Receta asociando por código o por nombre
-    const recetaArticulo = DB.recetas.filter(r => {
-        return Object.keys(r).some(k => {
-            const val = String(r[k]).trim();
-            return val === artSel;
-        });
-    });
+    // ---- 1. Calcular cantidad vendida en el mes para el artículo ----
+    let cantVendida = 0;
+    if (mesSel) {
+        DB.ventas.forEach(row => {
+            const keyFecha = findKey(row, ['FECHA']);
+            const keyNombre = findKey(row, ['NOMBRE', 'ARTICULO', 'PRODUCTO']);
+            const keyCant = findKey(row, ['CANTIDAD', 'UNIDADES', 'VOLUMEN', 'VENTA']);
 
-    let costoUnitarioTotal = 0;
-    let desgloseInsumos = [];
-
-    recetaArticulo.forEach(item => {
-        let codInsumo = '';
-        let cantTeorica = 0;
-        let descInsumo = '';
-
-        Object.keys(item).forEach(k => {
-            const kUpper = k.trim().toUpperCase();
-            if (kUpper.includes('INSUMO') && (kUpper.includes('COD') || kUpper.includes('CÓDIGO'))) {
-                codInsumo = String(item[k]).trim();
-            }
-            if (kUpper.includes('CANT') || kUpper.includes('TEORICA') || kUpper.includes('TEÓRICA')) {
-                cantTeorica = parseFloat(item[k] || 0);
-            }
-            if (kUpper.includes('DESC') || kUpper.includes('NOMBRE')) {
-                descInsumo = String(item[k]).trim();
-            }
-        });
-
-        // Buscar Precio
-        const precioItem = DB.precios.find(p => {
-            return Object.keys(p).some(k => String(p[k]).trim() === codInsumo);
-        });
-
-        let precioCompra = 0;
-
-        if (precioItem) {
-            Object.keys(precioItem).forEach(k => {
-                const kUpper = k.trim().toUpperCase();
-                if (kUpper.includes('PRECIO') || kUpper.includes('COMPRA') || kUpper.includes('COSTO')) {
-                    precioCompra = parseFloat(precioItem[k] || 0);
+            if (keyFecha && keyNombre && keyCant) {
+                const mesFila = formatToMesAnio(row[keyFecha]);
+                const nombreFila = String(row[keyNombre]).trim();
+                if (mesFila === mesSel && nombreFila === artSel) {
+                    const cant = parseFloat(row[keyCant]) || 0;
+                    cantVendida += cant;
                 }
-                if (!descInsumo && (kUpper.includes('DESC') || kUpper.includes('NOMBRE'))) {
-                    descInsumo = String(precioItem[k]).trim();
-                }
+            }
+        });
+    }
+
+    // ---- 2. Buscar la receta del artículo ----
+    // Buscamos en DB.recetas todas las filas cuyo nombre de artículo coincida con artSel
+    // La columna que contiene el nombre del artículo en la tabla de recetas puede variar.
+    // Usamos findKey para localizarla.
+    let recetasFiltradas = [];
+    if (DB.recetas.length > 0) {
+        // Primero, determinar cuál es la columna que contiene el nombre del artículo en recetas
+        // Tomamos la primera fila como referencia
+        const sampleRow = DB.recetas[0];
+        const keyArtReceta = findKey(sampleRow, ['ARTICULO', 'PRODUCTO', 'NOMBRE']);
+        if (keyArtReceta) {
+            recetasFiltradas = DB.recetas.filter(row => {
+                const nombre = String(row[keyArtReceta]).trim();
+                return nombre === artSel;
+            });
+        } else {
+            // Si no encontramos columna de artículo, fallback: buscar en cualquier columna (no recomendado)
+            recetasFiltradas = DB.recetas.filter(row => {
+                return Object.values(row).some(val => String(val).trim() === artSel);
             });
         }
+    }
 
+    if (recetasFiltradas.length === 0) {
+        document.getElementById('kpi-ventas').innerText = cantVendida.toLocaleString('es-AR');
+        document.getElementById('kpi-costo-unitario').innerText = '$ 0.00';
+        document.getElementById('kpi-costo-total').innerText = '$ 0.00';
+        document.querySelector('#table-receta tbody').innerHTML = '<tr><td colspan="6" class="empty-msg">No se encontró receta para este artículo.</td></tr>';
+        if (insumosChart) insumosChart.destroy();
+        return;
+    }
+
+    // ---- 3. Procesar cada fila de la receta (insumos) ----
+    let desgloseInsumos = [];
+    let costoUnitarioTotal = 0;
+
+    recetasFiltradas.forEach(item => {
+        // Extraer código de insumo, cantidad teórica, descripción
+        const keyCodInsumo = findKey(item, ['CODIGO INSUMO', 'COD INSUMO', 'CODIGO', 'INSUMO']);
+        const keyCantTeorica = findKey(item, ['CANTIDAD', 'TEORICA', 'CANT']);
+        const keyDescInsumo = findKey(item, ['DESCRIPCION', 'NOMBRE INSUMO', 'NOMBRE']);
+
+        let codInsumo = keyCodInsumo ? String(item[keyCodInsumo]).trim() : '';
+        let cantTeorica = keyCantTeorica ? parseFloat(item[keyCantTeorica]) || 0 : 0;
+        let descInsumo = keyDescInsumo ? String(item[keyDescInsumo]).trim() : '';
+
+        // Si no se encontró descripción, usar el código
         if (!descInsumo) descInsumo = 'Insumo ' + codInsumo;
+
+        // ---- 4. Buscar precio de compra para ese insumo ----
+        let precioCompra = 0;
+        if (codInsumo) {
+            // Buscar en DB.precios una fila cuyo código coincida
+            for (let pRow of DB.precios) {
+                const keyCodPrecio = findKey(pRow, ['CODIGO', 'INSUMO', 'COD']);
+                if (keyCodPrecio && String(pRow[keyCodPrecio]).trim() === codInsumo) {
+                    // Encontrar la columna de precio
+                    const keyPrecio = findKey(pRow, ['PRECIO', 'COSTO', 'COMPRA']);
+                    if (keyPrecio) {
+                        precioCompra = parseFloat(pRow[keyPrecio]) || 0;
+                    }
+                    break; // asumimos que solo hay una fila por código
+                }
+            }
+        }
 
         const subtotal = cantTeorica * precioCompra;
         costoUnitarioTotal += subtotal;
@@ -197,34 +236,15 @@ function applyFilters() {
         });
     });
 
-    // Unidades vendidas desde la base de Ventas
-    let cantVendida = 0;
-    if (mesSel) {
-        const ventaItem = DB.ventas.find(v => {
-            const keyFecha = Object.keys(v).find(k => k.trim().toUpperCase() === 'FECHA');
-            const matchMes = keyFecha && formatToMesAnio(v[keyFecha]) === mesSel;
-
-            const matchArt = Object.values(v).some(val => String(val).trim() === artSel);
-
-            return matchMes && matchArt;
-        });
-
-        if (ventaItem) {
-            Object.keys(ventaItem).forEach(k => {
-                const kUpper = k.trim().toUpperCase();
-                if (kUpper.includes('CANT') || kUpper.includes('VOLUMEN') || kUpper.includes('UNIDADES') || kUpper.includes('VENTA')) {
-                    if (!isNaN(ventaItem[k]) && ventaItem[k] !== '') cantVendida = parseFloat(ventaItem[k]);
-                }
-            });
-        }
-    }
-
+    // ---- 5. Calcular costo total de venta ----
     const costoVentaTotal = costoUnitarioTotal * cantVendida;
 
+    // ---- 6. Actualizar KPIs ----
     document.getElementById('kpi-ventas').innerText = cantVendida.toLocaleString('es-AR');
     document.getElementById('kpi-costo-unitario').innerText = '$ ' + costoUnitarioTotal.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
     document.getElementById('kpi-costo-total').innerText = '$ ' + costoVentaTotal.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
+    // ---- 7. Renderizar tabla y gráfico ----
     renderTable(desgloseInsumos, costoUnitarioTotal);
     renderChart(desgloseInsumos);
 }
@@ -258,6 +278,10 @@ function renderChart(insumos) {
     if (insumosChart) insumosChart.destroy();
 
     const insumosConCosto = insumos.filter(i => i.subtotal > 0);
+    if (insumosConCosto.length === 0) {
+        insumosChart = null;
+        return;
+    }
 
     const coloresCorporativos = [
         '#F40009', '#111111', '#555555', '#888888', '#BBBBBB', 
