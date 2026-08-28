@@ -13,6 +13,19 @@ document.getElementById('file-input').addEventListener('change', handleFileUploa
 document.getElementById('select-mes').addEventListener('change', applyFilters);
 document.getElementById('select-articulo').addEventListener('change', applyFilters);
 
+// Convertir fechas de Excel (ej: 45901) a formato mes-año (ej: sept-25)
+function parseExcelDate(value) {
+    if (!value) return '';
+    if (typeof value === 'number' && value > 30000) {
+        const date = new Date(Math.round((value - 25569) * 86400 * 1000));
+        const meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+        const mes = meses[date.getUTCMonth()];
+        const anio = String(date.getUTCFullYear()).slice(-2);
+        return `${mes}-${anio}`;
+    }
+    return String(value).trim();
+}
+
 function handleFileUpload(event) {
     const files = event.target.files;
     if (!files.length) return;
@@ -23,7 +36,7 @@ function handleFileUpload(event) {
         const reader = new FileReader();
         reader.onload = (e) => {
             const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, { type: 'array' });
+            const workbook = XLSX.read(data, { type: 'array', cellDates: true });
             const firstSheet = workbook.SheetNames[0];
             const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet]);
 
@@ -42,16 +55,31 @@ function handleFileUpload(event) {
 // Clasificación automática de la tabla según las columnas
 function classifyAndStoreData(fileName, data) {
     if (!data.length) return;
-    const keys = Object.keys(data[0]).map(k => k.toLowerCase());
 
-    if (keys.some(k => k.includes('insumo') && k.includes('precio'))) {
-        DB.precios = data;
-    } else if (keys.some(k => k.includes('cant') && k.includes('teorica'))) {
-        DB.recetas = data;
-    } else if (keys.some(k => k.includes('venta') || k.includes('factura'))) {
-        DB.ventas = data;
+    // Normalizar nombres de columnas para evitar fallos por espacios
+    const normalizedData = data.map(row => {
+        let newRow = {};
+        Object.keys(row).forEach(key => {
+            const cleanKey = key.trim();
+            if (cleanKey.toLowerCase().includes('mes')) {
+                newRow['MesClean'] = parseExcelDate(row[key]);
+            } else {
+                newRow[cleanKey] = row[key];
+            }
+        });
+        return newRow;
+    });
+
+    const sampleKeys = Object.keys(normalizedData[0]).map(k => k.toLowerCase());
+
+    if (sampleKeys.some(k => k.includes('precio') || k.includes('compra'))) {
+        DB.precios = normalizedData;
+    } else if (sampleKeys.some(k => k.includes('teorica') || k.includes('teórica') || k.includes('cant'))) {
+        DB.recetas = normalizedData;
+    } else if (sampleKeys.some(k => k.includes('venta') || k.includes('factura') || k.includes('volumen'))) {
+        DB.ventas = normalizedData;
     } else {
-        DB.teoricos = data;
+        DB.teoricos = normalizedData;
     }
 }
 
@@ -60,44 +88,52 @@ function populateFilterOptions() {
     const selectMes = document.getElementById('select-mes');
     const selectArticulo = document.getElementById('select-articulo');
 
-    // Extraer meses únicos de recetas o precios
-    const meses = [...new Set(DB.recetas.map(item => item.Mes || item.mes))].filter(Boolean);
+    // Extraer meses únicos normalizados
+    const meses = [...new Set([
+        ...DB.recetas.map(i => i.MesClean),
+        ...DB.precios.map(i => i.MesClean),
+        ...DB.ventas.map(i => i.MesClean)
+    ])].filter(Boolean);
+
     selectMes.innerHTML = '<option value="">-- Seleccionar Mes --</option>';
     meses.forEach(m => selectMes.innerHTML += `<option value="${m}">${m}</option>`);
     selectMes.disabled = false;
 
-    // Extraer artículos únicos
-    const articulos = [...new Set(DB.recetas.map(item => item.Articulo || item['Cod. Venta'] || item.Cod_Venta))].filter(Boolean);
+    // Extraer artículos únicos por código o nombre
+    const articulos = [...new Set([
+        ...DB.recetas.map(i => String(i['Cod. Venta'] || i.Cod_Venta || i.Articulo || '').trim()),
+        ...DB.ventas.map(i => String(i['Cod. Venta'] || i.Cod_Venta || i.Articulo || '').trim())
+    ])].filter(Boolean);
+
     selectArticulo.innerHTML = '<option value="">-- Seleccionar Artículo --</option>';
     articulos.forEach(a => selectArticulo.innerHTML += `<option value="${a}">${a}</option>`);
     selectArticulo.disabled = false;
 }
 
-// Ejecución del cálculo relacional al cambiar filtros
+// Ejecución del cálculo relacional
 function applyFilters() {
     const mesSel = document.getElementById('select-mes').value;
     const artSel = document.getElementById('select-articulo').value;
 
     if (!mesSel || !artSel) return;
 
-    // 1. Filtrar la Receta del Artículo y Mes seleccionado
+    // 1. Filtrar Receta
     const recetaArticulo = DB.recetas.filter(r => 
-        (r.Mes === mesSel || r.mes === mesSel) && 
-        (r.Articulo === artSel || r['Cod. Venta'] == artSel || r.Cod_Venta == artSel)
+        r.MesClean === mesSel && 
+        String(r['Cod. Venta'] || r.Cod_Venta || r.Articulo || '').trim() === artSel
     );
 
-    // 2. Cruzar cada Insumo con la tabla de Precios por Código Insumo y Mes
     let costoUnitarioTotal = 0;
     let desgloseInsumos = [];
 
+    // 2. Cruzar con Precios de Insumos
     recetaArticulo.forEach(item => {
-        const codInsumo = item['Código Insumo'] || item.Codigo_Insumo || item.cod_insumo;
-        const cantTeorica = parseFloat(item['Cant. Teorica'] || item.Cant_Teorica || item.cantidad || 0);
+        const codInsumo = String(item['Código Insumo'] || item.Codigo_Insumo || item.Cod_Insumo || '').trim();
+        const cantTeorica = parseFloat(item['Cant. Teorica'] || item['Cant. Teórica'] || item.Cant_Teorica || 0);
 
-        // Buscar Precio Compra
         const precioItem = DB.precios.find(p => 
-            (p.Mes === mesSel || p.mes === mesSel) && 
-            (p['Código Insumo'] == codInsumo || p.Codigo_Insumo == codInsumo)
+            p.MesClean === mesSel && 
+            String(p['Código Insumo'] || p.Codigo_Insumo || p.Cod_Insumo || '').trim() === codInsumo
         );
 
         const precioCompra = precioItem ? parseFloat(precioItem['Precio Compra'] || precioItem.Precio_Compra || 0) : 0;
@@ -106,27 +142,28 @@ function applyFilters() {
 
         desgloseInsumos.push({
             codInsumo,
-            descripcion: precioItem ? (precioItem.Descripción || precioItem.Descripcion) : 'Insumo ' + codInsumo,
+            descripcion: precioItem ? (precioItem.Descripción || precioItem.Descripcion || 'Insumo ' + codInsumo) : 'Insumo ' + codInsumo,
             cantTeorica,
             precioCompra,
             subtotal
         });
     });
 
-    // 3. Obtener Ventas del Artículo
+    // 3. Obtener Ventas
     const ventaItem = DB.ventas.find(v => 
-        (v.Mes === mesSel || v.mes === mesSel) && 
-        (v['Cod. Venta'] == artSel || v.Articulo === artSel)
+        v.MesClean === mesSel && 
+        String(v['Cod. Venta'] || v.Cod_Venta || v.Articulo || '').trim() === artSel
     );
-    const cantVendida = ventaItem ? parseFloat(ventaItem.Cantidad || ventaItem.cantidad_vendida || 1000) : 1000;
+
+    const cantVendida = ventaItem ? parseFloat(ventaItem.Cantidad || ventaItem.cantidad_vendida || ventaItem.Volumen || 0) : 0;
     const costoVentaTotal = costoUnitarioTotal * cantVendida;
 
-    // 4. Actualizar KPIs en la pantalla
-    document.getElementById('kpi-ventas').innerText = cantVendida.toLocaleString();
-    document.getElementById('kpi-costo-unitario').innerText = '$ ' + costoUnitarioTotal.toLocaleString('es-AR', {minimumFractionDigits: 2});
-    document.getElementById('kpi-costo-total').innerText = '$ ' + costoVentaTotal.toLocaleString('es-AR', {minimumFractionDigits: 2});
+    // 4. Actualizar KPIs
+    document.getElementById('kpi-ventas').innerText = cantVendida.toLocaleString('es-AR');
+    document.getElementById('kpi-costo-unitario').innerText = '$ ' + costoUnitarioTotal.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    document.getElementById('kpi-costo-total').innerText = '$ ' + costoVentaTotal.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
-    // 5. Renderizar Tabla y Gráfico
+    // 5. Renderizar Vistas
     renderTable(desgloseInsumos, costoUnitarioTotal);
     renderChart(desgloseInsumos);
 }
@@ -135,13 +172,18 @@ function renderTable(insumos, costoTotal) {
     const tbody = document.querySelector('#table-receta tbody');
     tbody.innerHTML = '';
 
+    if (insumos.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty-msg">No se encontraron insumos para este artículo y mes.</td></tr>';
+        return;
+    }
+
     insumos.forEach(i => {
-        const part = costoTotal > 0 ? ((i.subtotal / costoTotal) * 100).toFixed(1) : 0;
+        const part = costoTotal > 0 ? ((i.subtotal / costoTotal) * 100).toFixed(1) : '0.0';
         tbody.innerHTML += `
             <tr>
                 <td><b>${i.codInsumo}</b></td>
                 <td>${i.descripcion}</td>
-                <td>${i.cantTeorica}</td>
+                <td>${i.cantTeorica.toLocaleString('es-AR')}</td>
                 <td>$ ${i.precioCompra.toLocaleString('es-AR', {minimumFractionDigits: 2})}</td>
                 <td><b>$ ${i.subtotal.toLocaleString('es-AR', {minimumFractionDigits: 2})}</b></td>
                 <td>${part}%</td>
@@ -154,13 +196,15 @@ function renderChart(insumos) {
     const ctx = document.getElementById('chart-insumos').getContext('2d');
     if (insumosChart) insumosChart.destroy();
 
+    const insumosConCosto = insumos.filter(i => i.subtotal > 0);
+
     insumosChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: insumos.map(i => i.descripcion),
+            labels: insumosConCosto.map(i => i.descripcion),
             datasets: [{
-                data: insumos.map(i => i.subtotal),
-                backgroundColor: ['#F40009', '#111111', '#555555', '#999999', '#DDDDDD', '#AA0000']
+                data: insumosConCosto.map(i => i.subtotal),
+                backgroundColor: ['#F40009', '#111111', '#555555', '#999999', '#DDDDDD', '#AA0000', '#FF4D4D']
             }]
         },
         options: {
