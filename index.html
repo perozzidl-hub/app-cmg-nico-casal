@@ -1,260 +1,134 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Costeo de Ventas</title>
-    <!-- Librería para leer Excel en el navegador (CDN) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <style>
-        body { font-family: sans-serif; padding: 20px; background-color: #f4f4f4; }
-        .upload-section { display: flex; gap: 20px; margin-bottom: 20px; }
-        .drop-zone { border: 2px dashed #aaa; padding: 20px; text-align: center; cursor: pointer; background: white; width: 250px; }
-        .drop-zone.dragover { border-color: #4CAF50; background: #e8f5e9; }
-        .table-container { overflow-x: auto; background: white; padding: 20px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: right; }
-        th { background-color: #f2f2f2; cursor: pointer; }
-        .filters { margin-bottom: 20px; }
-        .error { color: red; font-weight: bold; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CMG · NICO CASAL – Dashboard de Ventas y Costos</title>
+
+  <!-- Google Fonts (Roboto) -->
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet" />
+  <!-- Font Awesome 6 (iconos) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+  <!-- Chart.js 4 -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <!-- SheetJS (XLSX) para leer el archivo Excel -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+
+  <!-- Estilos propios -->
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-
-    <h1>Costeo de Ventas</h1>
-
-    <div class="upload-section">
-        <div class="drop-zone" id="dropVentas">
-            <strong>1. Venta Liquidada</strong><br>Arrastra el Excel aquí o haz clic
-            <input type="file" id="fileVentas" accept=".xlsx, .xls" hidden>
-        </div>
-        <div class="drop-zone" id="dropRecetas">
-            <strong>2. Receta</strong><br>Arrastra el Excel aquí o haz clic
-            <input type="file" id="fileRecetas" accept=".xlsx, .xls" hidden>
-        </div>
-        <div class="drop-zone" id="dropPrecios">
-            <strong>3. Precios Insumos</strong><br>Arrastra el Excel aquí o haz clic
-            <input type="file" id="filePrecios" accept=".xlsx, .xls" hidden>
-        </div>
+  <header>
+    <div class="logo">
+      <i class="fas fa-chart-pie"></i>
+      <span>CMG · NICO CASAL</span>
     </div>
+    <div class="subtitle">Dashboard de Ventas, Recetas y Costos</div>
+  </header>
 
-    <div class="filters">
-        <label>Selecciona el mes de venta:</label>
-        <!-- Se llenará dinámicamente con los meses disponibles en el Excel de Ventas -->
-        <select id="mesSelector"></select>
-        <button onclick="renderResults()">Calcular</button>
-    </div>
+  <main>
+    <!-- Área de carga de archivo -->
+    <section class="upload-area" id="uploadArea">
+      <div class="upload-box">
+        <i class="fas fa-file-excel fa-3x"></i>
+        <h3>Cargar archivo de ventas</h3>
+        <p>Arrastra o selecciona tu archivo <strong>ventas.xlsx</strong></p>
+        <input type="file" id="fileInput" accept=".xlsx,.xls" />
+        <button id="loadDemoBtn" class="btn-demo">Cargar datos de ejemplo</button>
+      </div>
+      <div id="fileStatus" class="file-status"></div>
+    </section>
 
-    <div id="status"></div>
+    <!-- Filtros (se muestran después de cargar los datos) -->
+    <section class="filtros" id="filtrosSection" style="display: none;">
+      <div class="filtro-item">
+        <label for="selectArticulo"><i class="fas fa-box"></i> Artículo</label>
+        <select id="selectArticulo"></select>
+        <input type="text" id="searchArticulo" placeholder="Buscar artículo..." />
+      </div>
+      <div class="filtro-item">
+        <label for="selectMes"><i class="fas fa-calendar-alt"></i> Mes</label>
+        <select id="selectMes">
+          <option value="todos">Todos los meses</option>
+        </select>
+      </div>
+      <div class="filtro-item">
+        <label for="selectUbicacion"><i class="fas fa-store"></i> Ubicación</label>
+        <select id="selectUbicacion">
+          <option value="todas">Todas</option>
+        </select>
+      </div>
+      <div class="filtro-item">
+        <label for="selectTipo"><i class="fas fa-tag"></i> Tipo</label>
+        <select id="selectTipo">
+          <option value="todos">Todos</option>
+          <option value="P">Producto propio</option>
+          <option value="r">Reventa</option>
+        </select>
+      </div>
+    </section>
 
-    <div class="table-container">
-        <table id="resultsTable">
-            <thead>
-                <tr>
-                    <th>Mes Venta</th>
-                    <th>Cód. Venta</th>
-                    <th>Artículo</th>
-                    <th>Cantidad</th>
-                    <th>Importe Venta</th>
-                    <th>Costo Unitario</th>
-                    <th>Costo Total</th>
-                    <th>Margen (Ganancia)</th>
-                </tr>
-            </thead>
-            <tbody></tbody>
+    <!-- KPIs -->
+    <section class="resumen" id="resumenSection" style="display: none;">
+      <div class="card">
+        <span class="card-label"><i class="fas fa-cubes"></i> Unidades vendidas</span>
+        <span class="card-value" id="totalUnidades">0</span>
+      </div>
+      <div class="card">
+        <span class="card-label"><i class="fas fa-dollar-sign"></i> Facturación Neta</span>
+        <span class="card-value" id="facturacionNeta">$0.00</span>
+      </div>
+      <div class="card">
+        <span class="card-label"><i class="fas fa-coins"></i> Costo total</span>
+        <span class="card-value" id="costoTotal">$0.00</span>
+      </div>
+      <div class="card">
+        <span class="card-label"><i class="fas fa-percent"></i> Margen bruto</span>
+        <span class="card-value" id="margenBruto">0%</span>
+      </div>
+      <div class="card">
+        <span class="card-label"><i class="fas fa-weight"></i> Costo unitario</span>
+        <span class="card-value" id="costoUnitario">$0.00</span>
+      </div>
+    </section>
+
+    <!-- Gráficos -->
+    <section class="graficos" id="graficosSection" style="display: none;">
+      <div class="grafico-container">
+        <h3>Ventas mensuales</h3>
+        <canvas id="chartVentas"></canvas>
+      </div>
+      <div class="grafico-container">
+        <h3>Evolución del costo unitario</h3>
+        <canvas id="chartCostoUnitario"></canvas>
+      </div>
+      <div class="grafico-container full-width">
+        <h3>Composición del costo (insumos)</h3>
+        <canvas id="chartComposicion"></canvas>
+      </div>
+    </section>
+
+    <!-- Tabla detallada -->
+    <section class="tabla-detalle" id="tablaSection" style="display: none;">
+      <h3><i class="fas fa-table"></i> Detalle de transacciones</h3>
+      <div class="table-wrapper">
+        <table>
+          <thead id="tableHead"></thead>
+          <tbody id="tableBody"></tbody>
         </table>
-    </div>
+      </div>
+      <div class="table-footer">
+        <span id="registrosCount">0 registros</span>
+        <button id="exportCsvBtn" class="btn-export"><i class="fas fa-file-csv"></i> Exportar CSV</button>
+      </div>
+    </section>
+  </main>
 
-    <script>
-        // Variables globales
-        let dataVentas = [];
-        let dataRecetas = [];
-        let dataPrecios = [];
+  <footer>
+    <p>Datos actualizados al mes de marzo 2026 · Todos los derechos reservados</p>
+  </footer>
 
-        const mesesMap = {
-            'ene': 1, 'feb': 2, 'mar': 3, 'abr': 4, 'may': 5, 'jun': 6, 
-            'jul': 7, 'ago': 8, 'sep': 9, 'sept': 9, 'oct': 10, 'nov': 11, 'dic': 12
-        };
-
-        // Mapeo de meses a español
-        const mesesTexto = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-
-        // FUNCIÓN PARA PARSEAR FECHAS (ej: "sept-25")
-        function parsearFecha(str) {
-            if (!str) return null;
-            let parts = String(str).trim().toLowerCase().split('-');
-            if (parts.length !== 2) return null;
-            
-            let mes = mesesMap[parts[0]];
-            let anio = parseInt(parts[1]);
-            
-            if (!mes || isNaN(anio)) return null;
-            if (anio < 100) anio += 2000; // Convertir 25 a 2025
-            
-            return { anio: anio, mes: mes };
-        }
-
-        // LÓGICA CLAVE: BUSCAR HACIA ATRÁS
-        function buscarDatoMasReciente(dataArray, campoId, valorId, fechaVenta) {
-            let anio = fechaVenta.anio;
-            let mes = fechaVenta.mes;
-
-            // Buscar en el mismo mes
-            let encontrado = dataArray.find(row => 
-                row[campoId] === valorId && 
-                parsearFecha(row['Mes']).anio === anio && 
-                parsearFecha(row['Mes']).mes === mes
-            );
-
-            // Si no está, buscar hacia atrás
-            while (!encontrado && anio > 2000) {
-                mes--;
-                if (mes === 0) { mes = 12; anio--; }
-
-                encontrado = dataArray.find(row => 
-                    row[campoId] === valorId && 
-                    parsearFecha(row['Mes']).anio === anio && 
-                    parsearFecha(row['Mes']).mes === mes
-                );
-            }
-            return encontrado;
-        }
-
-        // FUNCIÓN PARA CARGAR ARCHIVOS
-        function setupDropZone(dropZoneId, inputId, dataSetter) {
-            const dropZone = document.getElementById(dropZoneId);
-            const fileInput = document.getElementById(inputId);
-
-            dropZone.addEventListener('click', () => fileInput.click());
-            dropZone.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                dropZone.classList.add('dragover');
-            });
-            dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-            dropZone.addEventListener('drop', (e) => {
-                e.preventDefault();
-                dropZone.classList.remove('dragover');
-                if (e.dataTransfer.files.length) {
-                    fileInput.files = e.dataTransfer.files;
-                    handleFile(fileInput.files[0], dataSetter);
-                }
-            });
-            fileInput.addEventListener('change', (e) => {
-                if (e.target.files.length) handleFile(e.target.files[0], dataSetter);
-            });
-        }
-
-        function handleFile(file, dataSetter) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, { type: 'array' });
-                const sheet = workbook.Sheets[workbook.SheetNames[0]];
-                const json = XLSX.utils.sheet_to_json(sheet);
-                
-                dataSetter(json);
-                document.getElementById('status').innerText = `Archivo "${file.name}" cargado correctamente.`;
-                populateMonthSelector();
-            };
-            reader.readAsArrayBuffer(file);
-        }
-
-        // CARGAR DATOS
-        setupDropZone('dropVentas', 'fileVentas', (data) => dataVentas = data);
-        setupDropZone('dropRecetas', 'fileRecetas', (data) => dataRecetas = data);
-        setupDropZone('dropPrecios', 'filePrecios', (data) => dataPrecios = data);
-
-        // POBLAR SELECTOR DE MESES SEGÚN VENTAS
-        function populateMonthSelector() {
-            const selector = document.getElementById('mesSelector');
-            selector.innerHTML = '';
-            const mesesDisponibles = new Set();
-            
-            dataVentas.forEach(row => {
-                const fecha = parsearFecha(row['Mes']);
-                if (fecha) mesesDisponibles.add(`${fecha.anio}-${fecha.mes}`);
-            });
-
-            Array.from(mesesDisponibles).sort((a, b) => b.localeCompare(a)).forEach(key => {
-                const [anio, mes] = key.split('-').map(Number);
-                const option = document.createElement('option');
-                option.value = key;
-                option.innerText = `${mesesTexto[mes - 1]} ${anio}`;
-                selector.appendChild(option);
-            });
-        }
-
-        // RENDERIZAR LA TABLA PRINCIPAL
-        function renderResults() {
-            const mesSeleccionado = document.getElementById('mesSelector').value;
-            if (!mesSeleccionado) return alert("Selecciona un mes o carga los archivos primero.");
-
-            const [anio, mes] = mesSeleccionado.split('-').map(Number);
-            const fechaVenta = { anio: anio, mes: mes };
-
-            // Filtrar ventas del mes seleccionado
-            const ventasMes = dataVentas.filter(row => {
-                const f = parsearFecha(row['Mes']);
-                return f && f.anio === anio && f.mes === mes;
-            });
-
-            const tbody = document.querySelector('#resultsTable tbody');
-            tbody.innerHTML = '';
-
-            ventasMes.forEach(venta => {
-                const codigoArticulo = venta['Cód. Venta']; // Según tu imagen es "Cód. Venta" o puede variar
-                const articulo = venta['Artículo']; 
-                const cantidad = venta['Cant. Teórica'] || venta['Cantidad'] || 0; // Ajusta según tu columna de cantidad real
-                const importeVenta = venta['Importe'] || venta['Total'] || 0; // Ajusta según tu columna de importe
-
-                // 1. Buscar la receta más reciente para este artículo
-                const receta = buscarDatoMasReciente(dataRecetas, 'Cód. Venta', codigoArticulo, fechaVenta);
-
-                let costoUnitario = 0;
-
-                // 2. Si hay receta, calcular el costo sumando los insumos
-                if (receta) {
-                    // Por simplificación, buscaré TODAS las recetas de ese artículo en ese mes/atrás. 
-                    // Si la receta es una fila por insumo (como en tu imagen), necesitamos agruparlas.
-                    // En tu ejemplo, cada fila es un insumo con su 'Código Insumo' y 'Cant. Teórica'.
-                    
-                    // Buscar todas las filas de recetas para ese código y esa fecha
-                    const recetasDelArticulo = dataRecetas.filter(r => 
-                        r['Cód. Venta'] === codigoArticulo && 
-                        JSON.stringify(parsearFecha(r['Mes'])) === JSON.stringify(parsearFecha(receta['Mes']))
-                    );
-
-                    recetasDelArticulo.forEach(filaReceta => {
-                        const codigoInsumo = filaReceta['Código Insumo'];
-                        const cantTeorica = parseFloat(filaReceta['Cant. Teórica']) || 0;
-
-                        // 3. Buscar el precio más reciente para este insumo
-                        const precioInsumo = buscarDatoMasReciente(dataPrecios, 'Código Insumo', codigoInsumo, fechaVenta);
-                        const precioCompra = precioInsumo ? parseFloat(precioInsumo['Precio Compra']) || 0 : 0;
-
-                        // Acumular costo
-                        costoUnitario += cantTeorica * precioCompra;
-                    });
-                }
-
-                const costoTotal = costoUnitario * cantidad;
-                const margen = importeVenta - costoTotal;
-
-                // Crear fila HTML
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${venta['Mes']}</td>
-                    <td>${codigoArticulo}</td>
-                    <td>${articulo}</td>
-                    <td>${cantidad}</td>
-                    <td>${importeVenta.toFixed(2)}</td>
-                    <td>${costoUnitario.toFixed(2)}</td>
-                    <td>${costoTotal.toFixed(2)}</td>
-                    <td style="color: ${margen >= 0 ? 'green' : 'red'}; font-weight: bold;">${margen.toFixed(2)}</td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
-    </script>
+  <!-- Lógica principal -->
+  <script src="app.js"></script>
 </body>
 </html>
