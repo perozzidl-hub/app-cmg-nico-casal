@@ -8,22 +8,33 @@ let DB = {
 
 let insumosChart = null;
 
-// Escuchar la carga de archivos Excel / CSV
+// Escuchar eventos de la interfaz
 document.getElementById('file-input').addEventListener('change', handleFileUpload);
 document.getElementById('select-mes').addEventListener('change', applyFilters);
 document.getElementById('select-articulo').addEventListener('change', applyFilters);
 
-// Convertir fechas de Excel (ej: 45901) a formato mes-año (ej: sept-25)
-function parseExcelDate(value) {
+// Función de formateo estricto a MES-AÑO (ej: sep-25)
+function formatToMesAnio(value) {
     if (!value) return '';
-    if (typeof value === 'number' && value > 30000) {
-        const date = new Date(Math.round((value - 25569) * 86400 * 1000));
-        const meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-        const mes = meses[date.getUTCMonth()];
-        const anio = String(date.getUTCFullYear()).slice(-2);
-        return `${mes}-${anio}`;
+    const meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    
+    let date;
+    if (value instanceof Date) {
+        date = value;
+    } else if (typeof value === 'number' && value > 30000) {
+        date = new Date(Math.round((value - 25569) * 86400 * 1000));
+    } else {
+        const parsed = Date.parse(value);
+        if (!isNaN(parsed)) {
+            date = new Date(parsed);
+        } else {
+            return String(value).trim();
+        }
     }
-    return String(value).trim();
+    
+    const mes = meses[date.getUTCMonth()];
+    const anio = String(date.getUTCFullYear()).slice(-2);
+    return `${mes}-${anio}`;
 }
 
 function handleFileUpload(event) {
@@ -52,87 +63,83 @@ function handleFileUpload(event) {
     });
 }
 
-// Clasificación automática de la tabla según las columnas
 function classifyAndStoreData(fileName, data) {
     if (!data.length) return;
 
-    // Normalizar nombres de columnas para evitar fallos por espacios
-    const normalizedData = data.map(row => {
-        let newRow = {};
-        Object.keys(row).forEach(key => {
-            const cleanKey = key.trim();
-            if (cleanKey.toLowerCase().includes('mes')) {
-                newRow['MesClean'] = parseExcelDate(row[key]);
-            } else {
-                newRow[cleanKey] = row[key];
-            }
-        });
-        return newRow;
-    });
-
-    const sampleKeys = Object.keys(normalizedData[0]).map(k => k.toLowerCase());
+    const sampleKeys = Object.keys(data[0]).map(k => k.toLowerCase());
 
     if (sampleKeys.some(k => k.includes('precio') || k.includes('compra'))) {
-        DB.precios = normalizedData;
+        DB.precios = data;
     } else if (sampleKeys.some(k => k.includes('teorica') || k.includes('teórica') || k.includes('cant'))) {
-        DB.recetas = normalizedData;
+        DB.recetas = data;
     } else if (sampleKeys.some(k => k.includes('venta') || k.includes('factura') || k.includes('volumen'))) {
-        DB.ventas = normalizedData;
+        // Formatear mes de ventas al momento de guardar
+        DB.ventas = data.map(row => {
+            let newRow = { ...row };
+            Object.keys(row).forEach(key => {
+                if (key.toLowerCase().includes('mes') || key.toLowerCase().includes('fecha')) {
+                    newRow['MesVentaFormateado'] = formatToMesAnio(row[key]);
+                }
+            });
+            return newRow;
+        });
     } else {
-        DB.teoricos = normalizedData;
+        DB.teoricos = data;
     }
 }
 
-// Carga de opciones en los selectores de filtro
 function populateFilterOptions() {
     const selectMes = document.getElementById('select-mes');
     const selectArticulo = document.getElementById('select-articulo');
 
-    // Extraer meses únicos normalizados
-    const meses = [...new Set([
-        ...DB.recetas.map(i => i.MesClean),
-        ...DB.precios.map(i => i.MesClean),
-        ...DB.ventas.map(i => i.MesClean)
-    ])].filter(Boolean);
-
+    // 1. Filtro de Mes proveniente EXCLUSIVAMENTE del archivo de Ventas
+    const mesesVentas = [...new Set(DB.ventas.map(i => i.MesVentaFormateado))].filter(Boolean);
     selectMes.innerHTML = '<option value="">-- Seleccionar Mes --</option>';
-    meses.forEach(m => selectMes.innerHTML += `<option value="${m}">${m}</option>`);
+    mesesVentas.forEach(m => selectMes.innerHTML += `<option value="${m}">${m}</option>`);
     selectMes.disabled = false;
 
-    // Extraer artículos únicos por código o nombre
-    const articulos = [...new Set([
-        ...DB.recetas.map(i => String(i['Cod. Venta'] || i.Cod_Venta || i.Articulo || '').trim()),
-        ...DB.ventas.map(i => String(i['Cod. Venta'] || i.Cod_Venta || i.Articulo || '').trim())
-    ])].filter(Boolean);
+    // 2. Filtro de Artículo con NOMBRE / DESCRIPCIÓN legible
+    let articulosMap = new Map();
+
+    // Extraer nombres desde Ventas o Receta
+    const fuenteArticulos = DB.ventas.length ? DB.ventas : DB.recetas;
+    fuenteArticulos.forEach(row => {
+        const codigo = String(row['Cod. Venta'] || row.Cod_Venta || row.Codigo || row.Articulo || '').trim();
+        const descripcion = row['Descripción'] || row.Descripcion || row.Nombre || row.Articulo_Nombre || row.Articulo || codigo;
+        
+        if (codigo && !articulosMap.has(codigo)) {
+            articulosMap.set(codigo, descripcion !== codigo ? `${codigo} - ${descripcion}` : codigo);
+        }
+    });
 
     selectArticulo.innerHTML = '<option value="">-- Seleccionar Artículo --</option>';
-    articulos.forEach(a => selectArticulo.innerHTML += `<option value="${a}">${a}</option>`);
+    articulosMap.forEach((nombreMostrar, codigo) => {
+        selectArticulo.innerHTML += `<option value="${codigo}">${nombreMostrar}</option>`;
+    });
     selectArticulo.disabled = false;
 }
 
-// Ejecución del cálculo relacional
 function applyFilters() {
     const mesSel = document.getElementById('select-mes').value;
     const artSel = document.getElementById('select-articulo').value;
 
-    if (!mesSel || !artSel) return;
+    if (!artSel) return;
 
-    // 1. Filtrar Receta
+    // 1. Receta del Artículo (Sin filtrar por mes)
     const recetaArticulo = DB.recetas.filter(r => 
-        r.MesClean === mesSel && 
         String(r['Cod. Venta'] || r.Cod_Venta || r.Articulo || '').trim() === artSel
     );
 
     let costoUnitarioTotal = 0;
     let desgloseInsumos = [];
 
-    // 2. Cruzar con Precios de Insumos
+    // 2. Obtener costo de los insumos (Sin filtrar por mes)
     recetaArticulo.forEach(item => {
         const codInsumo = String(item['Código Insumo'] || item.Codigo_Insumo || item.Cod_Insumo || '').trim();
         const cantTeorica = parseFloat(item['Cant. Teorica'] || item['Cant. Teórica'] || item.Cant_Teorica || 0);
 
+        // Buscar el precio de compra del insumo
         const precioItem = DB.precios.find(p => 
-            p.MesClean === mesSel && 
             String(p['Código Insumo'] || p.Codigo_Insumo || p.Cod_Insumo || '').trim() === codInsumo
         );
 
@@ -142,28 +149,31 @@ function applyFilters() {
 
         desgloseInsumos.push({
             codInsumo,
-            descripcion: precioItem ? (precioItem.Descripción || precioItem.Descripcion || 'Insumo ' + codInsumo) : 'Insumo ' + codInsumo,
+            descripcion: precioItem ? (precioItem.Descripción || precioItem.Descripcion) : (item.Descripción || 'Insumo ' + codInsumo),
             cantTeorica,
             precioCompra,
             subtotal
         });
     });
 
-    // 3. Obtener Ventas
-    const ventaItem = DB.ventas.find(v => 
-        v.MesClean === mesSel && 
-        String(v['Cod. Venta'] || v.Cod_Venta || v.Articulo || '').trim() === artSel
-    );
+    // 3. Obtener Ventas asociadas al Artículo y al Mes Seleccionado en Ventas
+    let cantVendida = 0;
+    if (mesSel) {
+        const ventaItem = DB.ventas.find(v => 
+            v.MesVentaFormateado === mesSel && 
+            String(v['Cod. Venta'] || v.Cod_Venta || v.Articulo || '').trim() === artSel
+        );
+        cantVendida = ventaItem ? parseFloat(ventaItem.Cantidad || ventaItem.cantidad_vendida || ventaItem.Volumen || 0) : 0;
+    }
 
-    const cantVendida = ventaItem ? parseFloat(ventaItem.Cantidad || ventaItem.cantidad_vendida || ventaItem.Volumen || 0) : 0;
     const costoVentaTotal = costoUnitarioTotal * cantVendida;
 
-    // 4. Actualizar KPIs
+    // 4. Actualizar KPIs en pantalla
     document.getElementById('kpi-ventas').innerText = cantVendida.toLocaleString('es-AR');
     document.getElementById('kpi-costo-unitario').innerText = '$ ' + costoUnitarioTotal.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
     document.getElementById('kpi-costo-total').innerText = '$ ' + costoVentaTotal.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
-    // 5. Renderizar Vistas
+    // 5. Renderizar vista detallada y gráfico
     renderTable(desgloseInsumos, costoUnitarioTotal);
     renderChart(desgloseInsumos);
 }
@@ -173,7 +183,7 @@ function renderTable(insumos, costoTotal) {
     tbody.innerHTML = '';
 
     if (insumos.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="empty-msg">No se encontraron insumos para este artículo y mes.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="empty-msg">No se encontraron insumos para este artículo.</td></tr>';
         return;
     }
 
@@ -204,7 +214,7 @@ function renderChart(insumos) {
             labels: insumosConCosto.map(i => i.descripcion),
             datasets: [{
                 data: insumosConCosto.map(i => i.subtotal),
-                backgroundColor: ['#F40009', '#111111', '#555555', '#999999', '#DDDDDD', '#AA0000', '#FF4D4D']
+                backgroundColor: ['#F40009', '#111111', '#555555', '#999999', '#DDDDDD', '#AA0000', '#FF4D4D', '#333333']
             }]
         },
         options: {
