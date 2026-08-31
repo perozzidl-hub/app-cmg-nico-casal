@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CMG · NICO CASAL – Dashboard de Ventas y Costos</title>
+  <title>CMG · NICO CASAL – Dashboard Ejecutivo</title>
 
   <!-- Google Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet" />
@@ -36,50 +36,22 @@
   </header>
 
   <main id="dashboardMain">
-    <!-- Área de carga múltiple -->
+    <!-- Zona de carga unificada (Un solo archivo Excel) -->
     <section class="upload-area" id="uploadArea">
-      <div class="upload-grid">
-        <div class="upload-box" data-type="ventas">
-          <i class="fas fa-file-invoice fa-2x"></i>
-          <h4>Ventas</h4>
-          <p>Archivo principal</p>
-          <input type="file" accept=".xlsx,.xls" />
-          <span class="file-status-msg">No cargado</span>
-        </div>
-        <div class="upload-box" data-type="recetas">
-          <i class="fas fa-list-ul fa-2x"></i>
-          <h4>Recetas</h4>
-          <p>(opcional)</p>
-          <input type="file" accept=".xlsx,.xls" />
-          <span class="file-status-msg">No cargado</span>
-        </div>
-        <div class="upload-box" data-type="costos">
-          <i class="fas fa-dollar-sign fa-2x"></i>
-          <h4>Costos de insumos</h4>
-          <p>(opcional)</p>
-          <input type="file" accept=".xlsx,.xls" />
-          <span class="file-status-msg">No cargado</span>
-        </div>
+      <div class="upload-box">
+        <i class="fas fa-cloud-upload-alt fa-3x"></i>
+        <h4>Cargar Base de Datos</h4>
+        <p>Sube un único archivo Excel con las pestañas de Ventas, Recetas y Costos (o solo Ventas).</p>
+        <input type="file" accept=".xlsx,.xls" />
+        <span class="file-status-msg">No cargado</span>
       </div>
-      <div class="upload-actions">
-        <button id="loadDemoBtn" class="btn-demo">Cargar datos de ejemplo</button>
-        <button id="processDataBtn" class="btn-primary" disabled>Procesar datos</button>
-      </div>
-      <div id="fileStatus" class="file-status"></div>
+      <!-- Se elimina el botón "Procesar" porque el sistema carga automáticamente -->
+      <div id="fileStatus" class="file-status">Carga un archivo Excel o usa datos de ejemplo.</div>
     </section>
 
-    <!-- Filtros (se muestran después de cargar) -->
+    <!-- Filtros simplificados para ejecutivos -->
     <section class="filtros" id="filtrosSection" style="display: none;">
-      <div class="filtro-item">
-        <label><i class="fas fa-box"></i> Artículos</label>
-        <div class="multi-select-container" id="articulosContainer">
-          <!-- Se llena con checkboxes -->
-        </div>
-        <div class="multi-select-actions">
-          <button class="btn-sm" id="selectAllArticulos">Todos</button>
-          <button class="btn-sm" id="deselectAllArticulos">Ninguno</button>
-        </div>
-      </div>
+      <!-- Se eliminaron los checkboxes de artículos para usar un dropdown simple -->
       <div class="filtro-item">
         <label for="selectMes"><i class="fas fa-calendar-alt"></i> Mes</label>
         <select id="selectMes">
@@ -102,7 +74,7 @@
       </div>
     </section>
 
-    <!-- KPIs -->
+    <!-- KPIs (Jerarquía visual destacada) -->
     <section class="resumen" id="resumenSection" style="display: none;">
       <div class="card">
         <span class="card-label"><i class="fas fa-cubes"></i> Unidades vendidas</span>
@@ -110,11 +82,11 @@
       </div>
       <div class="card">
         <span class="card-label"><i class="fas fa-dollar-sign"></i> Facturación Neta</span>
-        <span class="card-value" id="facturacionNeta">$0.00</span>
+        <span class="card-value" id="facturacionNeta">$0</span>
       </div>
       <div class="card">
         <span class="card-label"><i class="fas fa-coins"></i> Costo total</span>
-        <span class="card-value" id="costoTotal">$0.00</span>
+        <span class="card-value" id="costoTotal">$0</span>
       </div>
       <div class="card">
         <span class="card-label"><i class="fas fa-percent"></i> Margen bruto</span>
@@ -122,29 +94,27 @@
       </div>
       <div class="card">
         <span class="card-label"><i class="fas fa-weight"></i> Costo unitario</span>
-        <span class="card-value" id="costoUnitario">$0.00</span>
+        <span class="card-value" id="costoUnitario">$0</span>
       </div>
     </section>
 
     <!-- Gráficos -->
     <section class="graficos" id="graficosSection" style="display: none;">
-      <div class="grafico-container">
-        <h3>Ventas mensuales</h3>
+      <div class="grafico-container full-width">
+        <h3>Tendencia de Ventas (Unidades)</h3>
         <canvas id="chartVentas"></canvas>
       </div>
-      <div class="grafico-container">
-        <h3>Evolución del costo unitario</h3>
-        <canvas id="chartCostoUnitario"></canvas>
-      </div>
+      <!-- Nota: Se ha eliminado el gráfico de costo unitario para simplificar la vista, 
+           ya que el margen bruto ya da una visión clara de este dato. -->
       <div class="grafico-container full-width">
-        <h3>Composición del costo (insumos)</h3>
+        <h3>Composición del costo (Insumos)</h3>
         <canvas id="chartComposicion"></canvas>
       </div>
     </section>
 
-    <!-- Tabla detallada -->
+    <!-- Tabla Top 10 (Ideal para directivos) -->
     <section class="tabla-detalle" id="tablaSection" style="display: none;">
-      <h3><i class="fas fa-table"></i> Detalle de transacciones</h3>
+      <h3><i class="fas fa-trophy"></i> Top Productos por Facturación</h3>
       <div class="table-wrapper">
         <table>
           <thead id="tableHead"></thead>
