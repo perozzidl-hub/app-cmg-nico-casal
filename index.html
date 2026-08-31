@@ -1,14 +1,160 @@
-<!-- En la sección de carga -->
-<section class="upload-area" id="uploadArea">
-  <div class="upload-box">
-    <i class="fas fa-cloud-upload-alt fa-3x"></i>
-    <h4>Cargar Base de Datos</h4>
-    <p>Sube un único archivo Excel (con encabezados en cualquier fila).</p>
-    <input type="file" accept=".xlsx,.xls" />
-    <span class="file-status-msg">No cargado</span>
-  </div>
-  <div class="upload-actions">
-    <button id="loadRepoBtn" class="btn-primary"><i class="fas fa-database"></i> Cargar Datos del Repositorio</button>
-  </div>
-  <div id="fileStatus" class="file-status">Cargando datos automáticamente desde el repositorio...</div>
-</section>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CMG · NICO CASAL – Dashboard Ejecutivo</title>
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet" />
+  <!-- Font Awesome 6 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+  <!-- Chart.js 4 -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <!-- SheetJS (XLSX) -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+  <!-- html2canvas para exportar PDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+  <!-- Tu hoja de estilos -->
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <div class="logo">
+      <i class="fas fa-chart-pie"></i>
+      <span>CMG · NICO CASAL</span>
+    </div>
+    <div class="header-actions">
+      <button id="darkModeToggle" class="btn-icon" title="Modo oscuro">
+        <i class="fas fa-moon"></i>
+      </button>
+      <button id="exportPdfBtn" class="btn-icon" title="Exportar PDF">
+        <i class="fas fa-file-pdf"></i>
+      </button>
+    </div>
+    <div class="subtitle">Dashboard de Ventas, Recetas y Costos</div>
+  </header>
+
+  <main id="dashboardMain">
+    <!-- Zona de carga y botón del repositorio -->
+    <section class="upload-area" id="uploadArea">
+      <div class="upload-box">
+        <i class="fas fa-cloud-upload-alt fa-3x"></i>
+        <h4>Cargar Base de Datos</h4>
+        <p>Sube un único archivo Excel (con encabezados en cualquier fila).</p>
+        <input type="file" accept=".xlsx,.xls" />
+        <span class="file-status-msg">No cargado</span>
+      </div>
+      
+      <div class="upload-actions">
+        <button id="loadRepoBtn" class="btn-primary">
+          <i class="fas fa-database"></i> Cargar Datos del Repositorio
+        </button>
+      </div>
+
+      <div id="fileStatus" class="file-status">Cargando datos automáticamente desde el repositorio...</div>
+    </section>
+
+    <!-- Filtros simplificados para ejecutivos -->
+    <section class="filtros" id="filtrosSection" style="display: none;">
+      <div class="filtro-item">
+        <label for="selectArticulo"><i class="fas fa-box"></i> Artículo</label>
+        <select id="selectArticulo">
+          <option value="todos">Todos los Artículos</option>
+        </select>
+      </div>
+      <div class="filtro-item">
+        <label for="selectMes"><i class="fas fa-calendar-alt"></i> Mes</label>
+        <select id="selectMes">
+          <option value="todos">Todos los meses</option>
+        </select>
+      </div>
+      <div class="filtro-item">
+        <label for="selectUbicacion"><i class="fas fa-store"></i> Ubicación</label>
+        <select id="selectUbicacion">
+          <option value="todas">Todas</option>
+        </select>
+      </div>
+      <div class="filtro-item">
+        <label for="selectTipo"><i class="fas fa-tag"></i> Tipo</label>
+        <select id="selectTipo">
+          <option value="todos">Todos</option>
+          <option value="P">Propio</option>
+          <option value="R">Reventa</option>
+        </select>
+      </div>
+    </section>
+
+    <!-- KPIs (8 tarjetas para experiencia visual) -->
+    <section class="resumen" id="resumenSection" style="display: none;">
+      <div class="card">
+        <span class="card-label"><i class="fas fa-cubes"></i> Unidades vendidas</span>
+        <span class="card-value" id="totalUnidades">0</span>
+      </div>
+      <div class="card">
+        <span class="card-label"><i class="fas fa-dollar-sign"></i> Facturación Neta</span>
+        <span class="card-value" id="facturacionNeta">$0</span>
+      </div>
+      <div class="card">
+        <span class="card-label"><i class="fas fa-coins"></i> Costo Total</span>
+        <span class="card-value" id="costoTotal">$0</span>
+      </div>
+      <div class="card">
+        <span class="card-label"><i class="fas fa-percent"></i> Margen Bruto</span>
+        <span class="card-value" id="margenBruto">0%</span>
+      </div>
+      <div class="card">
+        <span class="card-label"><i class="fas fa-weight"></i> Costo Unitario</span>
+        <span class="card-value" id="costoUnitario">$0</span>
+      </div>
+      <div class="card">
+        <span class="card-label"><i class="fas fa-chart-line"></i> Unid. Prom. / Venta</span>
+        <span class="card-value" id="promedioUnidades">0</span>
+      </div>
+      <div class="card">
+        <span class="card-label"><i class="fas fa-tags"></i> Margen por Unid.</span>
+        <span class="card-value" id="margenUnidad">$0</span>
+      </div>
+      <div class="card">
+        <span class="card-label"><i class="fas fa-list"></i> Total Registros</span>
+        <span class="card-value" id="totalRegistros">0</span>
+      </div>
+    </section>
+
+    <!-- Gráficos a pantalla completa -->
+    <section class="graficos" id="graficosSection" style="display: none;">
+      <div class="grafico-container full-width">
+        <h3><i class="fas fa-chart-area"></i> Evolución Mensual de Ventas (Unidades)</h3>
+        <canvas id="chartVentas"></canvas>
+      </div>
+      <div class="grafico-container full-width">
+        <h3><i class="fas fa-chart-pie"></i> Composición del Costo (Según filtro seleccionado)</h3>
+        <canvas id="chartComposicion"></canvas>
+      </div>
+    </section>
+
+    <!-- Tabla Top 10 -->
+    <section class="tabla-detalle" id="tablaSection" style="display: none;">
+      <h3><i class="fas fa-trophy"></i> Top 10 Productos por Facturación</h3>
+      <div class="table-wrapper">
+        <table>
+          <thead id="tableHead"></thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+      <div class="table-footer">
+        <span id="registrosCount">0 registros</span>
+        <button id="exportCsvBtn" class="btn-export"><i class="fas fa-file-csv"></i> Exportar CSV</button>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Datos actualizados al mes de marzo 2026 · Todos los derechos reservados</p>
+  </footer>
+
+  <!-- Tu lógica JavaScript -->
+  <script src="app.js"></script>
+</body>
+</html>
