@@ -1,5 +1,6 @@
+// app.js - Carga Manual Únicamente
 document.addEventListener('DOMContentLoaded', function () {
-  // ========== REFERENCIAS DOM (Todas las existentes) ==========
+  // ========== REFERENCIAS DOM ==========
   const uploadArea = document.getElementById('uploadArea');
   const filtrosSection = document.getElementById('filtrosSection');
   const resumenSection = document.getElementById('resumenSection');
@@ -7,7 +8,6 @@ document.addEventListener('DOMContentLoaded', function () {
   const tablaSection = document.getElementById('tablaSection');
   
   const fileInput = document.querySelector('.upload-box input[type="file"]');
-  const loadRepoBtn = document.getElementById('loadRepoBtn');
   const fileStatus = document.getElementById('fileStatus');
 
   const selectArticulo = document.getElementById('selectArticulo');
@@ -119,22 +119,13 @@ document.addEventListener('DOMContentLoaded', function () {
     tablaSection.style.display = 'block';
   }
 
-  // ========== CARGAR ARCHIVO MANUAL ==========
-  function procesarArchivo(dataArray) {
-    state.ventas = procesarVentas(dataArray);
-    if (state.ventas.length === 0) {
-      alert('No se encontraron datos debajo de los encabezados. Revisa el archivo.');
-      return;
-    }
-    mostrarDashboard();
-    poblarFiltros(state.ventas);
-    aplicarFiltros();
-    fileStatus.textContent = '✅ Datos cargados correctamente.';
-  }
-
+  // ========== CARGAR ARCHIVO MANUAL (ÚNICA VÍA) ==========
   fileInput.addEventListener('change', function (e) {
     const file = e.target.files[0];
     if (!file) return;
+    
+    fileStatus.textContent = '⏳ Procesando archivo...';
+    
     const reader = new FileReader();
     reader.onload = function (loadEvent) {
       try {
@@ -142,54 +133,24 @@ document.addEventListener('DOMContentLoaded', function () {
         const workbook = XLSX.read(data, { type: 'array' });
         const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
         const dataArray = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' });
-        procesarArchivo(dataArray);
+
+        state.ventas = procesarVentas(dataArray);
+        
+        if (state.ventas.length === 0) {
+          fileStatus.textContent = '❌ No se encontraron datos debajo de los encabezados.';
+          return;
+        }
+
+        mostrarDashboard();
+        poblarFiltros(state.ventas);
+        aplicarFiltros();
+        fileStatus.textContent = '✅ Datos cargados correctamente.';
       } catch (err) {
-        alert('Error al leer el archivo: ' + err.message);
+        fileStatus.textContent = '❌ Error al leer el archivo: ' + err.message;
       }
     };
     reader.readAsArrayBuffer(file);
   });
-
-  // ========== CARGAR DESDE REPOSITORIO (SOLUCIONADO) ==========
-  async function cargarDesdeRepo() {
-    fileStatus.textContent = '⏳ Intentando cargar ventas.xlsx...';
-    // Si el usuario está en local (file://), avisarle que use un servidor o GitHub Pages
-    if (window.location.protocol === 'file:') {
-        fileStatus.textContent = '❌ Abre este archivo con "Live Server" o súbelo a GitHub Pages para que el botón funcione. Mientras tanto, puedes subirlo manualmente.';
-        return;
-    }
-
-    try {
-      const response = await fetch('ventas.xlsx');
-      if (!response.ok) throw new Error('Archivo no encontrado');
-      
-      const arrayBuffer = await response.arrayBuffer();
-      const wb = XLSX.read(arrayBuffer, { type: 'array' });
-      const dataArray = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' });
-
-      state.ventas = procesarVentas(dataArray);
-      
-      if (state.ventas.length === 0) {
-        fileStatus.textContent = '⚠️ El Excel no tiene datos debajo de los encabezados.';
-        return;
-      }
-
-      mostrarDashboard();
-      poblarFiltros(state.ventas);
-      aplicarFiltros();
-      fileStatus.textContent = '✅ Datos cargados automáticamente desde ventas.xlsx';
-
-    } catch (error) {
-      fileStatus.textContent = '❌ No se pudo cargar desde el repo. Sube el archivo manualmente.';
-      console.error('Error de CORS o archivo no encontrado:', error);
-    }
-  }
-
-  // Vincular botón del repositorio
-  loadRepoBtn.addEventListener('click', cargarDesdeRepo);
-
-  // Intentar carga automática al abrir
-  cargarDesdeRepo();
 
   // ========== FILTROS Y DASHBOARD ==========
   function poblarFiltros(datos) {
@@ -347,7 +308,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 
-  // ========== MODO OSCURO (CORREGIDO) ==========
+  // ========== MODO OSCURO ==========
   darkModeToggle.addEventListener('click', function () {
     document.body.classList.toggle('dark-mode');
     const icon = this.querySelector('i');
