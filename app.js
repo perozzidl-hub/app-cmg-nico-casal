@@ -144,6 +144,12 @@ document.addEventListener('DOMContentLoaded', function () {
     const dataComp = insumos.map(col => datos.reduce((acc, o) => acc + (o[col] || 0), 0));
     // ... Crear gráfico de dona aquí (esto hará que si filtras un artículo, veas su composición exacta) ...
   }
-  
+  async function cargarDesdeRepo() {
+  const response = await fetch('data.xlsx'); // Asegúrate de que el archivo se llame data.xlsx y esté en la raíz
+  const arrayBuffer = await response.arrayBuffer();
+  const wb = XLSX.read(arrayBuffer, { type: 'array' });
+  const dataArray = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' });
+  // Procesar igual que en el cambio de archivo...
+}
   // ... (Resto del código: Exportar CSV, PDF, Dark Mode)
 });
