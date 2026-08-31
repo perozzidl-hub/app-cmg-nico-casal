@@ -1,85 +1,14 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <!-- ... (Mantén tus mismos CDNs) ... -->
-  <link rel="stylesheet" href="style.css" />
-</head>
-<body>
-  <header>...</header>
-  <main id="dashboardMain">
-    <!-- Zona de carga -->
-    <section class="upload-area" id="uploadArea">
-      <div class="upload-box">
-        <i class="fas fa-cloud-upload-alt fa-3x"></i>
-        <h4>Cargar Base de Datos</h4>
-        <p>Sube un único archivo Excel (con encabezados en cualquier fila).</p>
-        <input type="file" accept=".xlsx,.xls" />
-        <span class="file-status-msg">No cargado</span>
-      </div>
-      <div id="fileStatus" class="file-status">Carga un archivo Excel o usa datos de ejemplo.</div>
-    </section>
-
-    <!-- Filtros Mejorados -->
-    <section class="filtros" id="filtrosSection" style="display: none;">
-      <div class="filtro-item">
-        <label for="selectArticulo"><i class="fas fa-box"></i> Artículo</label>
-        <select id="selectArticulo"><option value="todos">Todos los Artículos</option></select>
-      </div>
-      <div class="filtro-item">
-        <label for="selectMes"><i class="fas fa-calendar-alt"></i> Mes</label>
-        <select id="selectMes"><option value="todos">Todos los meses</option></select>
-      </div>
-      <div class="filtro-item">
-        <label for="selectUbicacion"><i class="fas fa-store"></i> Ubicación</label>
-        <select id="selectUbicacion"><option value="todas">Todas</option></select>
-      </div>
-      <div class="filtro-item">
-        <label for="selectTipo"><i class="fas fa-tag"></i> Tipo</label>
-        <select id="selectTipo">
-          <option value="todos">Todos</option>
-          <option value="P">Propio</option>
-          <option value="R">Reventa</option>
-        </select>
-      </div>
-    </section>
-
-    <!-- KPIs ampliados -->
-    <section class="resumen" id="resumenSection" style="display: none;">
-      <div class="card"><span class="card-label">Unidades vendidas</span><span class="card-value" id="totalUnidades">0</span></div>
-      <div class="card"><span class="card-label">Facturación Neta</span><span class="card-value" id="facturacionNeta">$0</span></div>
-      <div class="card"><span class="card-label">Costo Total</span><span class="card-value" id="costoTotal">$0</span></div>
-      <div class="card"><span class="card-label">Margen Bruto</span><span class="card-value" id="margenBruto">0%</span></div>
-      <div class="card"><span class="card-label">Costo Unitario</span><span class="card-value" id="costoUnitario">$0</span></div>
-      <div class="card"><span class="card-label">Unid. Prom. / Venta</span><span class="card-value" id="promedioUnidades">0</span></div>
-      <div class="card"><span class="card-label">Margen por Unid.</span><span class="card-value" id="margenUnidad">$0</span></div>
-      <div class="card"><span class="card-label">Total Registros</span><span class="card-value" id="totalRegistros">0</span></div>
-    </section>
-
-    <!-- Gráficos -->
-    <section class="graficos" id="graficosSection" style="display: none;">
-      <div class="grafico-container full-width">
-        <h3>Evolución Mensual de Ventas (Unidades)</h3>
-        <canvas id="chartVentas"></canvas>
-      </div>
-      <div class="grafico-container full-width">
-        <h3>Composición del Costo (Según filtro seleccionado)</h3>
-        <canvas id="chartComposicion"></canvas>
-      </div>
-    </section>
-
-    <!-- Tabla -->
-    <section class="tabla-detalle" id="tablaSection" style="display: none;">
-      <h3>Top 10 Productos por Facturación</h3>
-      <div class="table-wrapper">
-        <table><thead id="tableHead"></thead><tbody id="tableBody"></tbody></table>
-      </div>
-      <div class="table-footer">
-        <span id="registrosCount">0 registros</span>
-        <button id="exportCsvBtn" class="btn-export"><i class="fas fa-file-csv"></i> Exportar CSV</button>
-      </div>
-    </section>
-  </main>
-  <script src="app.js"></script>
-  <button onclick="cargarDesdeRepo()">Cargar datos del Repositorio</button>
-</body>
-</html>
+<!-- En la sección de carga -->
+<section class="upload-area" id="uploadArea">
+  <div class="upload-box">
+    <i class="fas fa-cloud-upload-alt fa-3x"></i>
+    <h4>Cargar Base de Datos</h4>
+    <p>Sube un único archivo Excel (con encabezados en cualquier fila).</p>
+    <input type="file" accept=".xlsx,.xls" />
+    <span class="file-status-msg">No cargado</span>
+  </div>
+  <div class="upload-actions">
+    <button id="loadRepoBtn" class="btn-primary"><i class="fas fa-database"></i> Cargar Datos del Repositorio</button>
+  </div>
+  <div id="fileStatus" class="file-status">Cargando datos automáticamente desde el repositorio...</div>
+</section>
